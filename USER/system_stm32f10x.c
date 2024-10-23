@@ -209,7 +209,7 @@ static void SetSysClock(void);
   * @param  None
   * @retval None
   */
-void SystemInit (void)
+void SystemInit_Official (void)
 {
   /* Reset the RCC clock configuration to the default reset state(for debug purpose) */
   /* Set HSION bit */
@@ -267,6 +267,39 @@ void SystemInit (void)
   SCB->VTOR = FLASH_BASE | VECT_TAB_OFFSET; /* Vector Table Relocation in Internal FLASH. */
 #endif 
 }
+
+void SystemInit(void)
+{
+    RCC_DeInit();//将外设 RCC寄存器重设为缺省值，复位
+    RCC_HSICmd(ENABLE);//使能HSI
+    while(RCC_GetFlagStatus(RCC_FLAG_HSIRDY) == RESET);      //等待HSI使能成功
+
+    //使能Flash与存储缓冲区，flash设置相关，查看闪存编程手册
+    FLASH->ACR |= FLASH_ACR_PRFTBE;
+    FLASH->ACR &= (uint32_t)((uint32_t)~FLASH_ACR_LATENCY);  //清除LATENCY位
+    FLASH->ACR |= (uint32_t)FLASH_ACR_LATENCY_2;
+
+    RCC_HCLKConfig(RCC_SYSCLK_Div1); //设置AHB的分频系数
+    RCC_PCLK1Config(RCC_HCLK_Div2);  //设置APB1的分频系数
+    RCC_PCLK2Config(RCC_HCLK_Div1);  //设置APB2的分频系数
+
+    //设置 PLL 时钟源及倍频系数
+    RCC_PLLConfig(RCC_PLLSource_HSI_Div2, RCC_PLLMul_16);
+    RCC_PLLCmd(ENABLE);//如果PLL被用于系统时钟,那么它不能被失能
+
+    //等待指定的 RCC 标志位设置成功 等待PLL初始化成功
+    while(RCC_GetFlagStatus(RCC_FLAG_PLLRDY) == RESET);
+
+    //设置系统时钟（SYSCLK） 设置PLL为系统时钟源
+    RCC_SYSCLKConfig(RCC_SYSCLKSource_PLLCLK);//选择想要的系统时钟
+    //等待PLL成功用作于系统时钟的时钟源
+
+    //  0x00：HSI 作为系统时钟
+    //  0x04：HSE作为系统时钟
+    //  0x08：PLL作为系统时钟
+    while(RCC_GetSYSCLKSource() != 0x08);//需与被选择的系统时钟对应起来
+}
+//设置的系统时钟 SYSCLK 为 64Mhz 
 
 /**
   * @brief  Update SystemCoreClock variable according to Clock Register Values.
